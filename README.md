@@ -118,6 +118,14 @@ curl -s -X POST http://localhost:8000/search \
   -d '{"q":"\"status indicator\" AND color", "k_components":1, "k_patterns":3, "k_typedoc":0}' | jq
 ```
 
+### Get full page（use /page?url=...）
+
+```bash
+curl -s "http://localhost:8000/page?url=https://cloudscape.design/components/flashbar/?tabId=api" \
+  | jq
+```
+
+
 ---
 
 ## Common Makefile Targets
