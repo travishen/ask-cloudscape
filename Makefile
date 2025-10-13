@@ -16,10 +16,10 @@ index:
 	  --db build/index.db
 
 build:
-	@docker build -t cloudscape-rag-bm25 .
+	@docker build -t ask-cloudscape .
 
 run:
-	@docker run --rm -p 8000:8000 cloudscape-rag-bm25
+	@docker run --rm -i ask-cloudscape
 
 clean:
 	rm -rf build data/wacz

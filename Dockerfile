@@ -9,10 +9,10 @@ WORKDIR /app
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-COPY app/ /app/app/
-COPY build/index.db /app/index.db
+RUN mkdir -p /app/build
+COPY build/index.db /app/build/index.db
+ENV DB_PATH=/app/build/index.db
 
-ENV DB_PATH=/app/index.db
+COPY main.py /app
 
-EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["python", "-m", "main"]
