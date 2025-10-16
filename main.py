@@ -2,14 +2,26 @@
 from __future__ import annotations
 from typing import Dict, Any, List
 import os, sqlite3, textwrap, re, hashlib, logging
-from mcp.server.fastmcp import FastMCP
 
+from mcp.server.fastmcp import FastMCP
+from starlette.applications import Starlette
+from starlette.responses import JSONResponse
+from starlette.middleware.cors import CORSMiddleware
+
+# ---------- Config ----------
 DB_PATH = os.getenv("DB_PATH", "build/index.db")
 MAX_PREVIEW = int(os.getenv("MAX_PREVIEW_CHARS", "220"))
 
-logging.basicConfig(level=logging.INFO)   # MCP: log to stderr, not stdout
-mcp = FastMCP("cloudscape")
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("cloudscape-mcp")
 
+# ---------- MCP ----------
+mcp = FastMCP(
+    "cloudscape",
+    instructions="Tools for AWS Cloudscape UI RAG: search buckets and fetch page content."
+)
+
+# ---------- DB helpers ----------
 _db: sqlite3.Connection | None = None
 def db() -> sqlite3.Connection:
     global _db
@@ -46,21 +58,24 @@ def _fts(q: str, limit: int) -> List[sqlite3.Row]:
     """
     return list(db().execute(sql, (q, limit)))
 
+# ---------- MCP tools ----------
 @mcp.tool()
 def search(q: str, k_components: int = 1, k_patterns: int = 5, k_typedoc: int = 3) -> Dict[str, Any]:
-    """Cloudscape RAG search (native). Buckets: components.api, components.usage, patterns, typedoc."""
     superset = _fts(q, limit=max(50, k_components*6 + k_patterns*6 + k_typedoc*6))
     buckets = {"components.api": [], "components.usage": [], "patterns": [], "typedoc": []}
     for r in superset:
         hit = {"url": r["url"], "title": r["title"], "text_preview": _short(r["text"]), "text_len": len(r["text"] or "")}
         b = _bucket(hit["url"])
-        if b in buckets: buckets[b].append(hit)
+        if b in buckets:
+            buckets[b].append(hit)
 
     def top(xs, k): return xs[:max(0, k)] if k >= 0 else []
     return {
         "query": q,
-        "components": {"api": top(buckets["components.api"], k_components),
-                       "usage": top(buckets["components.usage"], k_components)},
+        "components": {
+            "api":   top(buckets["components.api"],   k_components),
+            "usage": top(buckets["components.usage"], k_components),
+        },
         "patterns": top(buckets["patterns"], k_patterns),
         "typedoc":  top(buckets["typedoc"],  k_typedoc),
         "used_rag": True,
@@ -69,17 +84,37 @@ def search(q: str, k_components: int = 1, k_patterns: int = 5, k_typedoc: int = 
 
 @mcp.tool()
 def page(url: str) -> Dict[str, Any]:
-    """Return a full page by URL (or typedoc:// pseudo URL)."""
     row = db().execute("SELECT id,url,title,text FROM pages WHERE url=? LIMIT 1", (url,)).fetchone()
     if not row and url.startswith("typedoc://"):
         row = db().execute("SELECT id,url,title,text FROM pages WHERE url=? LIMIT 1", (url.replace("typedoc://",""),)).fetchone()
     if not row:
         return {"error": "NOT_FOUND", "url": url, "used_rag": True}
-    return {"id": row["id"], "url": row["url"], "title": row["title"], "text": row["text"],
-            "used_rag": True, "pack_id": _sha10(row["url"])}
+    return {"id": row["id"], "url": row["url"], "title": row["title"], "text": row["text"], "used_rag": True, "pack_id": _sha10(row["url"])}
 
-def main():
-    mcp.run(transport="stdio")   # STDI0 server for Cline
+# ---------- ASGI (SSE MCP) ----------
+async def health(_request):
+    ok = os.path.exists(DB_PATH)
+    return JSONResponse({"ok": ok, "db_path": DB_PATH})
+
+# Build FastMCP's SSE app with its default endpoints:
+#   GET  /sse            (event stream)
+#   POST /messages/      (backchannel)
+sse_app = mcp.sse_app()  # no custom paths => defaults to /sse and /messages/
+
+# Compose the parent Starlette app.
+# Mount SSE app at ROOT so its own routes (/sse, /messages/) are exact.
+app = Starlette()
+app.mount("/", sse_app)
+app.add_route("/health", health, methods=["GET"])
+
+# CORS so MCP Inspector (browser) can preflight/connect
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],                 # tighten if you need
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 if __name__ == "__main__":
-    main()
+    import uvicorn
+    uvicorn.run("main:app", host=os.getenv("HOST", "0.0.0.0"), port=int(os.getenv("PORT", "8000")))

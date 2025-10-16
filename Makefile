@@ -19,7 +19,7 @@ build:
 	@docker build -t ask-cloudscape .
 
 run:
-	@docker run --rm -i ask-cloudscape
+	@docker run --rm -p 8000:8000 ask-cloudscape
 
 clean:
 	rm -rf build data/wacz

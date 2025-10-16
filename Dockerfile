@@ -15,4 +15,7 @@ ENV DB_PATH=/app/build/index.db
 
 COPY main.py /app
 
-ENTRYPOINT ["python", "-m", "main"]
+EXPOSE 8000
+
+# SSE MCP over HTTP
+ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
