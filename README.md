@@ -2,7 +2,7 @@
 
 An **offline-deployable** Cloudscape documentation retrieval service:
 
-Browsertrix crawl → Generate WACZ → (Optional) Generate TypeDoc Markdown with Node/Docker → **Page-level** SQLite FTS5 index (BM25) → FastAPI HTTP server for querying.
+Browsertrix crawl → Generate WACZ → (Optional) Generate TypeDoc Markdown with Node/Docker → **Page-level** SQLite FTS5 index (BM25) → MCP HTTP server for querying.
 
 * Runs **fully offline** (no model required at query time).
 * Results are grouped into four **buckets**: `components.api`, `components.usage`, `patterns`, `typedoc`.
@@ -47,7 +47,7 @@ make index
 * Reads from `data/wacz/.../cloudscape.wacz` (or timestamped file) and `data/typedoc_md/**`
 * Produces `build/index.db` (SQLite + FTS5)
 
-### 4) Run the HTTP Server (offline)
+### 4) Run the MCP HTTP Server (offline)
 
 ```bash
 make build
@@ -125,7 +125,6 @@ curl -s "http://localhost:8000/page?url=https://cloudscape.design/components/fla
   | jq
 ```
 
-
 ---
 
 ## Common Makefile Targets
@@ -133,8 +132,8 @@ curl -s "http://localhost:8000/page?url=https://cloudscape.design/components/fla
 * `make crawl` → Crawl with Browsertrix, output WACZ (`pages.jsonl`, `extraPages.jsonl`)
 * `make typedoc` → Generate TypeDoc Markdown via Node/Docker (`data/typedoc_md/**`)
 * `make index` → Build **page-level** SQLite FTS5 index from WACZ + Markdown
-* `make build` → Build Docker image with FastAPI server
-* `make run` → Run HTTP server with `build/index.db`
+* `make build` → Build Docker image with MCP server
+* `make run` → Run MCP HTTP server with `build/index.db`
 
 ---
 
@@ -148,11 +147,8 @@ curl -s "http://localhost:8000/page?url=https://cloudscape.design/components/fla
 2. **URL Normalization & Buckets**
 
    * `components.api`: `.../components/<name>/?tabId=api`
-
    * `components.usage`: `.../components/<name>/?tabId=usage`
-
    * `patterns`: `.../patterns/**` (no tab split)
-
    * `typedoc`: From npm packages like `@cloudscape-design/components` (`typedoc://...`)
 
    > Noise pages (e.g., `tabId=playground/testing` or `?example=`) are **excluded**.
@@ -204,7 +200,6 @@ NODE_IMAGE=node:20-bookworm-slim   ; # Used by TypeDoc container
 > 3. For usage guidance, best practices, or UX guidelines, check the `patterns` bucket.
 > 4. For precise types/interfaces/events, check the `typedoc` bucket.
 > 5. When composing answers:
->
 >    * Cite sources using the returned `url`.
 >    * Integrate in the order **API → Usage → Patterns → TypeDoc**.
 >    * Use only retrieved content—no speculation.
@@ -213,3 +208,4 @@ NODE_IMAGE=node:20-bookworm-slim   ; # Used by TypeDoc container
 > 6. End with a “References” list of 1–4 URLs.
 >
 > Queries may use keywords or phrases (e.g., `"Flashbar"`, `"\"status indicator\" AND color"`). If results are too broad, start with `components.api` and `usage`; expand to `patterns` if more context is needed.
+
